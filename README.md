@@ -110,12 +110,36 @@ Cancelled appointments remain in the database for history but no longer reserve 
 20. Availability never exposes patient-identifying information about occupied appointments.
 21. Schedule exceptions, such as one-off holidays, are outside the initial scope.
 
+
+
+### Working-hour integrity
+
+- Working intervals for the same doctor and weekday must not overlap. Adjacent intervals are allowed.
+- Working intervals must have a valid start and end, follow the clinic's `:00`/`:30` grid, and have an end later than the start.
+- Working-hour validation must run when creating or updating a schedule, not only when booking an appointment.
+
+### Availability authentication
+
+- Doctor availability requires authentication.
+- Authenticated users may retrieve availability without receiving patient-identifying information about occupied appointments.
+- Inactive doctors are not bookable, and their availability endpoint returns `404 Not Found`.
+
+
 ### Authentication and authorization
 
 22. Authentication is required for protected appointment operations.
 23. Patients may access only their own appointments.
 24. Requests for another patient's appointment or appointment history return `404 Not Found` to avoid disclosing resource existence.
 25. `403 Forbidden` is used for role or permission restrictions where the resource's existence need not be concealed.
+
+
+### Role permissions
+
+- **PATIENT:** May view availability, book appointments for themselves, cancel or reschedule their own appointments, and retrieve their own upcoming appointments.
+- **DOCTOR:** May view their own appointment information and schedule-related information. They cannot access another doctor's private appointment details or manage another doctor's schedule without explicit permission.
+- **STAFF:** May use authorized administrative functions to manage clinic users, doctor profiles, working hours, and appointments.
+- Django's `is_staff` and superuser permissions govern Django admin access separately from the application role.
+- All protected operations must enforce permissions on the server; hiding UI controls is not sufficient.
 
 ### Booking-horizon policy
 
