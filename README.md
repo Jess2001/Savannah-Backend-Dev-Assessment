@@ -116,6 +116,10 @@ Cancelled appointments remain in the database for history but no longer reserve 
 23. Patients may access only their own appointments.
 24. Requests for another patient's appointment or appointment history return `404 Not Found` to avoid disclosing resource existence.
 25. `403 Forbidden` is used for role or permission restrictions where the resource's existence need not be concealed.
+26. Role	Book	Cancel / reschedule	View appointment list	Availability
+PATIENT	yes	own only (others return 404)	own only	yes
+STAFF	no	any	any patient’s	yes
+DOCTOR	no	no (403)	no (403)	yes
 
 ### Booking-horizon policy
 
