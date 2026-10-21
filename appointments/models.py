@@ -7,6 +7,8 @@ from .constants import SLOT_DURATION
 class AppointmentStatus(models.TextChoices):
     CONFIRMED = "CONFIRMED", "Confirmed"
     CANCELLED = "CANCELLED", "Cancelled"
+    COMPLETED = "COMPLETED", "Completed"
+    NO_SHOW = "NO_SHOW", "No show"
 
 
 class Appointment(models.Model):
@@ -46,7 +48,7 @@ class Appointment(models.Model):
                 name="uniq_confirmed_patient_slot",
             ),
             models.CheckConstraint(
-                condition=Q(status=AppointmentStatus.CONFIRMED)
+                condition= ~Q(status=AppointmentStatus.CANCELLED)
                 | ~Q(cancellation_reason=""),
                 name="cancelled_requires_reason",
             ),
