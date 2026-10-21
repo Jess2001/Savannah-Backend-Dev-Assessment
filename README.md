@@ -68,7 +68,7 @@ Business rules will live in reusable application services rather than being dupl
 - Foreign key to a patient.
 - Foreign key to a doctor.
 - Timezone-aware start timestamp stored in UTC.
-- Status: `CONFIRMED` or `CANCELLED`.
+- Status: `CONFIRMED`,`COMPLETED`,`NO SHOW` ,`CANCELLED`.
 - Cancellation reason and creation/update timestamps.
 
 Appointment duration is fixed at 30 minutes. The end time is derived from the start time rather than stored independently.
