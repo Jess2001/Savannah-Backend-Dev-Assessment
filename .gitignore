@@ -16,7 +16,7 @@ config/.env
 
 # Django
 db.sqlite3
-staticfiles/.
+staticfiles/
 
 # Tests and coverage
 .pytest_cache/
