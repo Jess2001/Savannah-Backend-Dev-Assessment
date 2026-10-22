@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_spectacular',
     'accounts',
     'doctors',
     'appointments',
@@ -145,6 +146,7 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
     ],
     "EXCEPTION_HANDLER": "appointments.exception_handler.api_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 SIMPLE_JWT = {
@@ -168,3 +170,18 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Savannah Clinic Appointment API",
+    "DESCRIPTION": (
+        "Book, cancel and reschedule clinic appointments.\n\n"
+        "**To try it:** call `POST /auth/token` with a demo login "
+        "(`patient_one` / `ClinicDemo123!`), copy the `access` value, click "
+        "**Authorize** at the top right and paste it. All times are ISO 8601 "
+        "with a timezone; clinic rules use `Africa/Nairobi` (UTC+3)."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_AUTHENTICATION": [],
+    "SWAGGER_UI_SETTINGS": {"persistAuthorization": True},
+}
