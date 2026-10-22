@@ -7,6 +7,7 @@ A REST API for a small clinic (5 doctors, 30-minute slots) where patients view a
 | **Live API** | https://savannah-clinic-api.onrender.com |
 | **Repository** | https://github.com/Jess2001/Savannah-Backend-Dev-Assessment |
 | **Deploys from** | `main` (via GitHub Actions, after the tests pass) |
+| **API docs (Swagger)** | https://savannah-clinic-api.onrender.com/docs |
 | **Postman collection** | [`docs/Savannah-Clinic-API.postman_collection.json`](docs/Savannah-Clinic-API.postman_collection.json) (30 requests, 62 assertions) |
 
 > **First request may be slow.** The API runs on Render's free tier, which sleeps after 15 minutes without traffic and needs about a minute to wake. The Neon database also sleeps when idle, so the first database request after a quiet period can take a few extra seconds. Open `/health` first to wake the service.
@@ -39,7 +40,7 @@ curl -X POST https://savannah-clinic-api.onrender.com/appointments \
   -d '{"doctor_id":1,"start_time":"2026-10-26T06:00:00Z"}'
 ```
 
-The simplest way to exercise everything is to import the Postman collection and run it.
+Or skip curl: open `/docs`, log in via `POST /auth/token`, click **Authorize**, paste the access token, and try every endpoint from the browser. The Postman collection runs the whole flow, including the failure cases.
 
 ## Project status
 
@@ -52,6 +53,7 @@ The simplest way to exercise everything is to import the Postman collection and 
 | Auth, roles, ownership | Verified | API tests per role |
 | Deployment | Verified | Postman collection passes against the live URL |
 | CI/CD | Verified | GitHub Actions: tests on every PR, deploy after merge to `main` |
+| API documentation | Verified | Swagger UI at `/docs`, schema at `/schema`; `config/test_docs.py` fails if an endpoint drops out of the schema |
 
 *Implemented* = the code exists. *Verified* = automated tests or deployment checks demonstrate it. Known gaps are listed honestly in section 10.
 
@@ -165,7 +167,7 @@ config/views.py         /health and / (public)
 
 ## 3. API reference
 
-All endpoints require `Authorization: Bearer <access token>` except `/health`, `/` and the token endpoints. URLs have no trailing slash. All bodies are JSON.
+All endpoints require `Authorization: Bearer <access token>` except `/health`, `/`,`/docs `,`/schema` and the token endpoints. URLs have no trailing slash. All bodies are JSON.
 
 | Method | Endpoint | Who | Success |
 |---|---|---|---|
@@ -177,6 +179,9 @@ All endpoints require `Authorization: Bearer <access token>` except `/health`, `
 | `PATCH` | `/appointments/{id}/reschedule` | patient (own), staff | `200` |
 | `GET` | `/patients/{id}/appointments` | patient (own), staff | `200` (bonus) |
 | `GET` | `/health`, `/` | anyone | `200` |
+| `GET` | `/docs` | anyone | `200` interactive Swagger UI |
+| `GET` | `/schema` | anyone | `200` OpenAPI schema (importable into Postman) |
+
 
 **Book** request: `{"doctor_id": 1, "start_time": "2026-10-26T06:00:00Z"}`.
 **Cancel** request: `{"reason": "Feeling better"}`. **Reschedule** request: `{"start_time": "2026-10-26T06:30:00Z"}`.
@@ -262,14 +267,15 @@ pytest
 ```
 
 Roughly 70 automated tests, run against a real PostgreSQL database (so constraints are genuinely exercised):
-
+Swagger UI and schema are public and list every endpoint
 | File | Covers |
 |---|---|
 | `appointments/test_services.py` | availability (18 slots for 08:00-17:00, booked slot hidden, day off, past date, notice window); booking (valid, off-grid 08:15 after 08:00, outside hours, last slot, past, 1-hour boundary, 60-day boundary, doctor and patient double booking, inactive doctor); cancel, reschedule and their failure cases; **a two-thread race proving exactly one booking wins**; a simulated database conflict translated to a clean error |
 | `appointments/tests.py` | the database constraints themselves |
 | `appointments/test_api.py` | every endpoint over HTTP: status codes, error codes, roles, ownership (404), JWT login flow |
 | `doctors/tests.py`, `patients/tests.py`, `accounts/tests.py` | working-hour validation, role/profile consistency, superuser role |
-| `appointments/test_seed.py`, `config/test_health.py` | idempotent seeding, public health/root endpoints |
+| `appointments/test_seed.py`, `config/test_health.py`,`config/test_docs.py` | idempotent seeding, public health/root endpoints |
+
 
 The Postman collection in `docs/` (62 assertions) tests the deployed API end to end, including the negative cases, and passes against the live URL.
 
@@ -314,7 +320,7 @@ python manage.py createsuperuser    # your own admin login
 python manage.py runserver
 pytest
 ```
-
+With the server running, interactive docs are at http://127.0.0.1:8000/docs.
 ---
 
 ## 7. Deployment and CI/CD
@@ -362,7 +368,7 @@ Deliberately left out, with the upgrade path:
 - **Multiple timezones / clinics:** add a timezone field on clinic or doctor.
 - **Doctor features:** the `DOCTOR` role exists but has no appointment access yet; link doctors to their own appointments and schedule.
 - **API for `COMPLETED` / `NO_SHOW`:** staff set these in Django admin today.
-- **Staff booking for patients, user registration, token revocation/logout, pagination, rate limiting, OpenAPI/Swagger docs:** not built; the seed command and demo accounts stand in for registration.
+- **Staff booking for patients, user registration, token revocation/logout, pagination, rate limiting:** not built; the seed command and demo accounts stand in for registration.
 - **Database-level grid enforcement:** currently service-level only (section 4).
 - **Deploy verification in CI:** poll the Render deploy to confirm success.
 - **Free-tier hosting:** cold starts on the first request after idle time.
@@ -385,7 +391,7 @@ Examples included  UTC storage versus the clinic's Nairobi timezone, working-hou
 I used AI for implementation guidance, Django configuration, reviewing model and business-rule decisions, and writing targeted tests. You also used it to identify checks to run and interpret the results.
 
 - **Deployment and CI/CD:** Setting up the GitHub Actions workflow and step-by-step Render/Neon setup. Claude checked the current free-tier limits of both hosts before I committed to them. I created the accounts, set the secrets and fixed the problems that came up (a missing `build.sh` on the deploy branch, environment file location, admin login).
-- **Testing and documentation:** the Postman collection, commit structuring, and drafting this README, which I checked against the code.
+- **Testing and documentation:** the Swagger/OpenAPI annotations,the Postman collection, commit structuring, and drafting this README, which I checked against the code.
 
 **2. One example where an AI suggestion improved my work.**
 
