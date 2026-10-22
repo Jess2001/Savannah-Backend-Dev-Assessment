@@ -373,46 +373,46 @@ Deliberately left out, with the upgrade path:
 - **Deploy verification in CI:** poll the Render deploy to confirm success.
 - **Free-tier hosting:** cold starts on the first request after idle time.
 
+- 
+A confirmed appointment whose time has passed cannot be cancelled or rescheduled, and nothing marks it COMPLETED automatically. Staff record outcomes in Django admin; a scheduled job or staff endpoint is the upgrade.”
 ---
 
 ## 10. AI reflection (Section 4)
 
-**How I worked.** I used AI as a working tool throughout. Claude AI was used to challenge my design decisions and  drafted most of the implementation in small batches, each with an explanation of what it does and why. My role was to direct and verify it: I set the scope, questioned design choices, changed or rejected suggestions, ran every batch myself (tests, migrations, the Postman collection, the deployment), brought back the failures I hit, and debugged my environment and the deployment. I treated every suggestion as a proposal until it ran green.
-**1. What did I use AI for across the four sections?**
+### How I worked
 
-- **Section 1 — System design and README
+I used AI as a working tool throughout the assessment. Claude AI helped challenge my design decisions and drafted much of the implementation in small batches, explaining what each part did and why. My role was to direct and verify the work: I set the scope, questioned design choices, changed or rejected suggestions, ran the tests and migrations, tested the API using the Postman collection, and worked through deployment issues. I brought failures back for analysis and debugged my local environment and deployment. I treated AI suggestions as proposals until I had checked the resulting behaviour.
 
-I used AI to help reason through the data model, API boundaries, business rules, validation, and edge cases before implementation. You discussed trade-offs and refined the design rather than immediately jumping into coding.
+### 1. What did I use AI for across the four sections?
 
-Examples included  UTC storage versus the clinic's Nairobi timezone, working-hour validation, double-booking prevention, and what should happen during cancellation or rescheduling.
+- **Section 1 — System design and README:** I used AI to reason through the data model, API boundaries, business rules, validation, and edge cases before implementation. I considered trade-offs rather than jumping straight into coding. Examples included UTC storage versus the clinic's Nairobi timezone, working-hour validation, double-booking prevention, and cancellation and rescheduling behaviour.
 
-- **Section 2 — API implementation and testing
+- **Section 2 — API implementation and testing:** I used AI for implementation guidance, Django configuration, reviewing model and business-rule decisions, and writing targeted tests. It also helped me identify checks to run and interpret the results.
 
-I used AI for implementation guidance, Django configuration, reviewing model and business-rule decisions, and writing targeted tests. You also used it to identify checks to run and interpret the results.
+- **Section 3 — Deployment and CI/CD:** I used AI to help configure the GitHub Actions workflow and work through the Render and Neon setup. Claude helped me check the providers' free-tier limits before I committed to them. I created the accounts, configured the secrets, and resolved issues involving a missing `build.sh` on the deployment branch, environment-file placement, and admin login.
 
-- **Deployment and CI/CD:** Setting up the GitHub Actions workflow and step-by-step Render/Neon setup. Claude checked the current free-tier limits of both hosts before I committed to them. I created the accounts, set the secrets and fixed the problems that came up (a missing `build.sh` on the deploy branch, environment file location, admin login).
-- **Testing and documentation:** the Swagger/OpenAPI annotations,the Postman collection, commit structuring, and drafting this README, which I checked against the code.
+- **Section 4 — Testing and documentation:** I used AI to help with Swagger/OpenAPI annotations, the Postman collection, commit structuring, and drafting this README. I checked the documentation against the implementation rather than assuming the generated content was correct.
 
-**2. One example where an AI suggestion improved my work.**
+### 2. One example where an AI suggestion improved my work
 
-*Prompt:* "I've structured the system design. Evaluate it and challenge my decisions with better options for this assessment, prioritising correctness, complexity cost and growth path."
+**Prompt:** "I've structured the system design. Evaluate it and challenge my decisions with better options for this assessment, prioritising correctness, complexity cost and growth path."
 
-*Suggestion:* my draft used a PostgreSQL exclusion constraint on `start_time + 30 minutes`. The review pointed out that, because every appointment is exactly 30 minutes and must sit on the half-hour grid, two appointments overlap only if they share a start time, so a partial unique constraint gives the same guarantee, works natively in Django, and is easier to explain. It also warned that an expression on `timestamptz + interval` may not be usable in an index because it is not immutable, and that the grid check must then become an explicit rule. I did not test the exclusion-constraint version, so I treat that warning as the reviewer's flag, not a result I reproduced.
+**Suggestion:** My initial design used a PostgreSQL exclusion constraint on `start_time + 30 minutes`. The review pointed out that, because every appointment lasts exactly 30 minutes and must start on the half-hour grid, two appointments overlap only when they share a start time. A partial unique constraint therefore provides the required protection with a simpler implementation that Django supports natively. The review also flagged that an expression involving `timestamptz + interval` might not be suitable for an index if it is not immutable, and that the half-hour grid rule would need explicit validation.
 
-*Effect:* the design became simpler and the grid rule explicit (rule 1), with a test for exactly the dangerous case: 08:00 booked, 08:15 attempted, rejected before it reaches the database.
+I did not implement or test the exclusion-constraint version, so I treated that warning as a design consideration rather than a result I had independently reproduced.
 
-**3. One example where AI output was wrong, and how I caught it.**
+**Effect:** I adopted the simpler partial unique-constraint approach and made the half-hour grid rule explicit. I also tested the relevant edge case: after an 08:00 appointment is booked, an attempt to book at 08:15 is rejected before it reaches the database.
 
-The generated Postman collection's login tests referenced a variable before declaring it. Running the collection showed four failures with `Cannot access 'body' before initialization`, even though every one of those requests returned `200`. That told me the API was fine and the *test script* was broken: the check line ran before the line that defined `body`. I corrected the script order and re-ran the collection to confirm it was clean.
+### 3. One example where AI output was wrong, and how I caught it
 
+The generated Postman collection's login tests referenced a variable before declaring it. When I ran the collection, four tests failed with `Cannot access 'body' before initialization`, even though the corresponding requests returned `200 OK`. This showed that the API requests were succeeding but the test script itself was failing: the assertion code ran before `body` was initialized. I corrected the script order and reran the collection to check the result.
 
-**4. Two decisions I made without AI, and why I trusted my own judgment.**
+### 4. Two decisions I made independently, and why
 
-1. **Rescheduling is an operation, not a status, and the lifecycle also needs `COMPLETED` and `NO_SHOW`.** I distinguished what an appointment currently *is* from an action performed on it: a rescheduled appointment is still `CONFIRMED`, it just moved. And a clinic needs to record whether a visit happened or the patient did not turn up. I trusted my judgment because this is domain modelling about how a clinic works, not a technical detail where I would defer to a tool.
-2. **Using database constraints to protect booking correctness
-Application-level validation can check whether a slot is available, but two concurrent requests can both pass that check before either saves its appointment. I opted combining validation with database-level uniqueness constraints and transactional handling, rather than relying on an availability check alone.
+1. **Rescheduling is an operation, not an appointment status.** I modelled rescheduling as a change to an existing appointment rather than a separate status. An appointment that has been rescheduled remains `CONFIRMED` unless its state changes for another reason. I also included `COMPLETED` and `NO_SHOW` to distinguish visits that took place from those where the patient did not attend. I made this decision based on the clinic's appointment lifecycle and the distinction between an action and the resulting state.
 
+2. **Store appointment timestamps in UTC and apply clinic rules in Nairobi time.** I chose UTC for stored timestamps to keep time handling consistent, while using the `Africa/Nairobi` timezone when interpreting clinic working hours and local booking dates. This separates storage from the clinic's operating calendar and helps avoid inconsistent date and time comparisons. I considered this a better fit for a system whose business rules are defined by the clinic's local time.
 
-**How I used AI .** I used AI as a development assistant and a way to challenge my reasoning. It helped me explore design alternatives, understand trade-offs, work through implementation details, identify edge cases, and develop tests and documentation. I treated its suggestions as proposals rather than automatically accepting them. I reviewed suggestions against the assessment requirements, considered their implications, and used testing and debugging to check the resulting behavior. The process helped me move faster while also improving my understanding of the decisions and trade-offs involved.
+### Reflection
 
-AI was useful for generating possibilities and explaining unfamiliar details, but it was not a substitute for understanding the system. 
+AI helped me explore alternatives, understand implementation details, identify edge cases, and develop tests and documentation more efficiently. However, I did not treat generated code or explanations as automatically correct. I checked the implementation against the assessment requirements, ran tests, investigated failures, and made the final decisions based on the system's behaviour and design needs. The process helped me work faster while building my understanding of the trade-offs involved.
