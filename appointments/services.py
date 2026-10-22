@@ -87,14 +87,13 @@ def book_appointment(patient, doctor, start_time, now=None):
         raise SlotUnavailableError(message) from exc
 
 
-def cancel_appointment(appointment_id, reason):
+def cancel_appointment(appointment_id, reason, now=None):
+    now = now or timezone.now()
     reason = (reason or "").strip()
     if not reason:
         raise BookingValidationError("A cancellation reason is required.")
 
     with transaction.atomic():
-        # Lock this row until the transaction ends, so a simultaneous
-        # cancel or reschedule of the same appointment has to wait its turn.
         appointment = Appointment.objects.select_for_update().get(pk=appointment_id)
 
         if appointment.status == AppointmentStatus.CANCELLED:
@@ -104,7 +103,10 @@ def cancel_appointment(appointment_id, reason):
                 "Only confirmed appointments can be cancelled "
                 f"(this one is {appointment.get_status_display().lower()})."
             )
-
+        if appointment.start_time <= now:
+            raise InvalidStateError(
+                "This appointment has already started or passed and can no longer be cancelled."
+            )
         appointment.status = AppointmentStatus.CANCELLED
         appointment.cancellation_reason = reason
         appointment.save(update_fields=["status", "cancellation_reason", "updated_at"])
@@ -129,6 +131,10 @@ def reschedule_appointment(appointment_id, new_start_time, now=None):
             raise InvalidStateError(
                 "Only confirmed appointments can be rescheduled "
                 f"(this one is {appointment.get_status_display().lower()})."
+            )
+        if appointment.start_time <= now:
+            raise InvalidStateError(
+                "This appointment has already started or passed and can no longer be rescheduled."
             )
         if appointment.start_time == new_start_time:
             raise BookingValidationError("The appointment is already at that time.")
