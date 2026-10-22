@@ -287,3 +287,63 @@ def test_jwt_login_flow(doctor, hours, patient):
         f"/doctors/{doctor.pk}/availability", {"date": DAY.isoformat()}
     )
     assert response.status_code == 200
+
+
+def reschedule(user, appointment_id, start):
+    return client_as(user).patch(
+        f"/appointments/{appointment_id}/reschedule",
+        {"start_time": iso(start)},
+        format="json",
+    )
+
+
+def test_reschedule_into_a_taken_slot_returns_409(
+    doctor, hours, patient, other_patient
+):
+    mine = book(patient.user, doctor, at(9)).json()["id"]
+    book(other_patient.user, doctor, at(10))
+    response = reschedule(patient.user, mine, at(10))
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "slot_unavailable"
+
+
+def test_reschedule_off_grid_returns_400(doctor, hours, patient):
+    mine = book(patient.user, doctor, at(9)).json()["id"]
+    response = reschedule(patient.user, mine, at(10, 15))
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "booking_rule_violation"
+
+
+def test_other_patient_cannot_reschedule(doctor, hours, patient, other_patient):
+    mine = book(patient.user, doctor, at(9)).json()["id"]
+    assert reschedule(other_patient.user, mine, at(10)).status_code == 404
+
+
+def test_doctor_role_cannot_reschedule(doctor, hours, patient):
+    mine = book(patient.user, doctor, at(9)).json()["id"]
+    assert reschedule(doctor.user, mine, at(10)).status_code == 403
+
+
+def test_reschedule_unknown_appointment_returns_404(patient):
+    assert reschedule(patient.user, 99999, at(10)).status_code == 404
+
+
+def test_booking_with_unknown_doctor_returns_400(patient):
+    response = client_as(patient.user).post(
+        "/appointments",
+        {"doctor_id": 99999, "start_time": iso(at(9))},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_past_appointment_cannot_be_cancelled_over_http(doctor, patient):
+    past = Appointment.objects.create(
+        patient=patient, doctor=doctor, start_time=timezone.now() - timedelta(days=3)
+    )
+    response = client_as(patient.user).patch(
+        f"/appointments/{past.pk}/cancel", {"reason": "Too late"}, format="json"
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "invalid_state"

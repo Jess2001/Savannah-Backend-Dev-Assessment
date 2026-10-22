@@ -192,6 +192,33 @@ def test_completed_appointment_cannot_be_cancelled(doctor, patient):
         services.cancel_appointment(appt.pk, "Changed my mind")
 
 
+def test_past_appointment_cannot_be_cancelled(doctor, hours, patient):
+    appt = book(patient, doctor, at(9))
+    with pytest.raises(InvalidStateError, match="already started or passed"):
+        services.cancel_appointment(appt.pk, "Too late", now=at(10))
+
+
+def test_past_appointment_cannot_be_rescheduled(doctor, hours, patient):
+    appt = book(patient, doctor, at(9))
+    with pytest.raises(InvalidStateError, match="already started or passed"):
+        services.reschedule_appointment(appt.pk, at(15), now=at(10))
+
+
+def test_database_conflict_during_reschedule_keeps_the_original(
+    doctor, hours, patient, other_patient, monkeypatch
+):
+    appt = book(patient, doctor, at(9))
+    book(other_patient, doctor, at(10))
+    # Skip the friendly checks so the database constraint has to decide.
+    monkeypatch.setattr(services, "validate_slot", lambda *args, **kwargs: None)
+    with pytest.raises(SlotUnavailableError, match="just been booked"):
+        services.reschedule_appointment(appt.pk, at(10), now=NOW)
+
+    appt.refresh_from_db()
+    assert appt.start_time == at(9)
+    assert appt.status == AppointmentStatus.CONFIRMED
+
+
 # ---------- reschedule ----------
 
 
